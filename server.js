@@ -25,19 +25,26 @@ var port = process.env.PORT || 8080;        // set our port
 var nano = require('nano')('http://localhost:5984')
 var db_transactions
 var db_addresses
+var init = true
 
-nano.db.destroy('db_transactions', function(err, body, header) {
-  nano.db.destroy('db_addresses', function(err, body, header) {
-    nano.db.create('db_transactions', function(err, body, header) {
-      if (err) { return err }
-      db_transactions = nano.db.use('db_transactions')
+if (init) {
+  nano.db.destroy('db_transactions', function(err, body, header) {
+    nano.db.destroy('db_addresses', function(err, body, header) {
+      nano.db.create('db_transactions', function(err, body, header) {
+        if (err) { return err }
+        db_transactions = nano.db.use('db_transactions')
         nano.db.create('db_addresses', function(err, body, header) {
           if (err) { return err }
           db_addresses = nano.db.use('db_addresses')
         })
+      })
     })
   })
-})
+} else {
+  db_transactions = nano.db.use('db_transactions')
+  db_addresses = nano.db.use('db_addresses')
+}
+
 // ROUTES FOR OUR API
 // =============================================================================
 var router = express.Router();              // get an instance of the express Router
@@ -83,8 +90,75 @@ router.get('/transaction/:tx_id', function(req, res) {
 });
 
 router.post('/spend', function(req, res) {
-    var inputs = req.inputs
-    var outputs = req.outputs
+  var inputs = req.body.inputs
+  var outputs = req.body.outputs
+
+  // Make sure all inputs are >= outputs
+  var totalInputs = 0
+  var totalOutputs = 0
+  for (var n in inputs) {
+    if (inputs[n].amount < 0) {
+      res.json({err: "Error: negative input"})
+      return
+    }
+    totalInputs += inputs[n].amount
+  }
+
+  for (var n in outputs) {
+    if (outputs[n].amount < 0) {
+      res.json({err: "Error: negative output"})
+      return
+    }
+    totalOutputs += outputs[n].amount
+  }
+  if (totalOutputs > totalInputs) {
+    res.json({err: "Error: Insufficient funds"})
+    return
+  }
+
+  const networkFee = totalInputs - totalOutputs
+
+  // Make sure all input addresses at least have sufficient funds
+  var chkInputs = inputs.slice()
+  checkInputs(chkInputs, function (err, response) {
+    if (err) {
+      res.json(err)
+    } else {
+      const r = random()
+      const txid = r.hex(24)
+
+      txObj = {
+        networkFee: networkFee,
+        inputs: inputs,
+        outputs: outputs
+      }
+
+      // Put the new transaction in the tx database
+      db_transactions.insert(txObj, txid, function (err, response) {
+        if (err) {
+          res.json(err)
+        } else {
+          // Update input addresses and output addresses with new balances and
+          // Add txid to their lists
+          var spInputs = inputs.slice()
+          spendInputOutputs(spInputs, 1, txid, function (err, response) {
+            if (err) {
+              res.json(err)
+            } else {
+              var spOutputs = outputs.slice()
+              spendInputOutputs(spOutputs, 0, txid, function (err, response) {
+                if (err) {
+                  res.json(err)
+                } else {
+                  res.json({ status: "Successful Spend", txid: txid })
+                }
+              })
+            }
+          })
+        }
+      })
+    }
+  })
 })
 // more routes for our API will happen here
 
@@ -129,7 +203,8 @@ function createAddress(addr, cb) {
         ],
         outputs: [
           { address: addr, amount: amountInt }
-        ]
+        ],
+        networkFee: 0
       }
       db_transactions.insert(txObj, txid, function (err, res) {
         if (err) {
@@ -143,6 +218,51 @@ function createAddress(addr, cb) {
     }
   })
 
+}
 
+function checkInputs (inputs, cb) {
+  if (inputs.length == 0) {
+    cb(null, true)
+  } else {
+    db_addresses.get(inputs[0].address, function (err, res) {
+      if (err) {
+        cb(err)
+      } else {
+        if (res.balance >= inputs[0].amount) {
+          inputs.splice(0, 1)
+          checkInputs(inputs, cb)
+        } else {
+          cb({error: "Insufficient funds in address " + inputs[i].address})
+        }
+      }
+    })
+  }
+}
 
+function spendInputOutputs (inOuts, bIn, txid, cb) {
+  if (inOuts.length == 0) {
+    cb(null)
+  } else {
+    db_addresses.get(inOuts[0].address, function (err, res) {
+      if (err) {
+        cb(err)
+      } else {
+        var amt = inOuts[0].amount
+        if (bIn) {
+          amt *= -1
+        }
+        res.balance += amt
+        res.txids = res.txids.concat(txid)
+
+        db_addresses.insert(res, inOuts[ 0 ].address, function (err, res) {
+          if (err) {
+            cb(err)
+          } else {
+            inOuts.splice(0,1)
+            spendInputOutputs(inOuts, bIn, txid, cb)
+          }
+        })
+      }
+    })
+  }
 }
