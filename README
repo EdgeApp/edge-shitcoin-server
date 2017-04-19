@@ -1,0 +1,7 @@
+Airbitz Shitcoin Server for serving up all the coin are belong to us
+
+npm install
+
+## Install MongoDB on Mac OSX
+brew install mongodb --with-openssl
+mongod --config /usr/local/etc/mongod.conf
