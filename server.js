@@ -80,16 +80,34 @@ router.get('/address/:address_id', function(req, res) {
     })
 });
 
+function getBlockHeight(unixTimeSeconds) {
+  // 30s blocks starting at Jan 1 1970
+  var numBlocks = unixTimeSeconds / (60 * 2)
+  numBlocks = Math.floor(numBlocks)
+  return numBlocks
+
+}
+
 router.get('/transaction/:tx_id', function(req, res) {
     console.log('API /transaction/' + req.params.tx_id)
     db_transactions.get(req.params.tx_id, function(err, response) {
         if (err) {
           res.json(err)
         } else {
+          response.blockHeight = getBlockHeight(response.txDate) + 1
           res.json(response)
         }
     })
-});
+})
+
+router.get('/height', function(req, res) {
+  console.log('API /height/')
+  const d = new Date()
+  var response = {
+    height: getBlockHeight(d.getTime())
+  }
+  res.json(response)
+})
 
 router.post('/spend', function(req, res) {
   var inputs = req.body.inputs
@@ -128,11 +146,13 @@ router.post('/spend', function(req, res) {
     } else {
       const r = random()
       const txid = r.hex(24)
+      const d = new Date()
 
       txObj = {
         networkFee: networkFee,
         inputs: inputs,
-        outputs: outputs
+        outputs: outputs,
+        txDate: d.getTime()
       }
 
       // Put the new transaction in the tx database
@@ -198,6 +218,7 @@ function createAddress(addr, cb) {
     if (err)
       cb(err)
     else if (amountInt) {
+      const d = new Date()
 
       const txObj = {
         inputs: [
@@ -206,7 +227,8 @@ function createAddress(addr, cb) {
         outputs: [
           { address: addr, amount: amountInt }
         ],
-        networkFee: 0
+        networkFee: 0,
+        txDate: d.getTime()
       }
       db_transactions.insert(txObj, txid, function (err, res) {
         if (err) {
