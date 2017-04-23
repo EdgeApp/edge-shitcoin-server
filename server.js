@@ -82,7 +82,7 @@ router.get('/address/:address_id', function(req, res) {
 
 function getBlockHeight(unixTimeSeconds) {
   // 30s blocks starting at Jan 1 1970
-  var numBlocks = unixTimeSeconds / (60 * 2)
+  var numBlocks = unixTimeSeconds / (1000 * 30)
   numBlocks = Math.floor(numBlocks)
   return numBlocks
 
