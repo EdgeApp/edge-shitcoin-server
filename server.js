@@ -286,7 +286,11 @@ function spendInputOutputs (inOuts, bIn, txid, cb) {
           amt *= -1
         }
         res.balance += amt
-        res.txids = res.txids.concat(txid)
+        if (res.txids == undefined) {
+          res.txids = [txid]
+        } else {
+          res.txids = res.txids.concat(txid)
+        }
 
         db_addresses.insert(res, inOuts[ 0 ].address, function (err, res) {
           if (err) {
