@@ -149,6 +149,7 @@ router.post('/spend', function(req, res) {
       const d = new Date()
 
       txObj = {
+        txid,
         networkFee: networkFee,
         inputs: inputs,
         outputs: outputs,
@@ -225,6 +226,7 @@ function createAddress(addr, cb) {
       const d = new Date()
 
       const txObj = {
+        txid,
         inputs: [
           { address: 'coinbase_tx', amount: amountInt }
         ],
