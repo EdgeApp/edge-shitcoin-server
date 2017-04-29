@@ -198,20 +198,24 @@ function createAddress(addr, cb) {
   const parts = addr.split('__')
   var amountString = ''
   var amountInt = 0
+  let addressObj = []
+
   if (parts.length > 1) {
     amountString = parts[parts.length - 1]
     amountInt = parseInt(amountString)
   }
-  const r = random()
-  const txid = r.hex(24)
 
   // Insert the new address
 
-  const addressObj = {
-    balance: amountInt,
-    txids: [
-      txid
-    ]
+  addressObj = {
+    address: addr,
+    balance: amountInt
+  }
+
+  const r = random()
+  const txid = r.hex(24)
+  if (amountInt > 0) {
+    addressObj.txids = [ txid ]
   }
 
   db_addresses.insert(addressObj, addr, function (err, res) {
@@ -230,13 +234,17 @@ function createAddress(addr, cb) {
         networkFee: 0,
         txDate: d.getTime()
       }
-      db_transactions.insert(txObj, txid, function (err, res) {
-        if (err) {
-          cb(err)
-        } else {
-          cb(null, addressObj)
-        }
-      })
+      if (amountInt > 0) {
+        db_transactions.insert(txObj, txid, function (err, res) {
+          if (err) {
+            cb(err)
+          } else {
+            cb(null, addressObj)
+          }
+        })
+      } else {
+        cb(null, addressObj)
+      }
     } else {
       cb(null, addressObj)
     }
