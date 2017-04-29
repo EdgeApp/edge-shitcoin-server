@@ -59,25 +59,25 @@ router.use(function(req, res, next) {
 });
 
 router.get('/address/:address_id', function(req, res) {
-    console.log('API /address/' + req.params.address_id)
-    db_addresses.get(req.params.address_id, function(err, response) {
-        if (err) {
-          if (err.error == 'not_found') {
-            // Create address with default funds
-            createAddress(req.params.address_id, function(err, response) {
-              if (err) {
-                res.json(err);
-              } else {
-                res.json(response);
-              }
-            })
-          } else {
+  console.log('API /address/' + req.params.address_id)
+  db_addresses.get(req.params.address_id, function(err, response) {
+    if (err) {
+      if (err.error == 'not_found') {
+        // Create address with default funds
+        createAddress(req.params.address_id, function(err, response) {
+          if (err) {
             res.json(err);
+          } else {
+            res.json(response);
           }
-        } else {
-          res.json(response);
-        }
-    })
+        })
+      } else {
+        res.json(err);
+      }
+    } else {
+      res.json(response);
+    }
+  })
 });
 
 function getBlockHeight(unixTimeSeconds) {
