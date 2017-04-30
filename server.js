@@ -3,16 +3,15 @@
 // BASE SETUP
 // =============================================================================
 
+const GENESIS_BLOCK_TIME_MS = 1491004800000 // Apr 1, 2017 00:00 GMT
+const BLOCK_TIME_SECONDS    = 60
+
 // call the packages we need
 var express    = require('express');        // call express
 var app        = express();                 // define our app using express
 var bodyParser = require('body-parser');
 var random     = require('random-js')
 var cors       = require('cors')
-// var mongoose   = require('mongoose');
-
-// mongoose.connect('mongodb://node:localhost:27017/'); // connect to our database
-// var Address     = require('./app/models/address');
 
 // configure app to use bodyParser()
 // this will let us get the data from a POST
@@ -81,11 +80,22 @@ router.get('/address/:address_id', function(req, res) {
 });
 
 function getBlockHeight(unixTimeSeconds) {
-  // 30s blocks starting at Jan 1 1970
-  var numBlocks = unixTimeSeconds / (1000 * 30)
+  // 60s blocks starting at Jan 1 2017 GMT
+  var numBlocks = (unixTimeSeconds - GENESIS_BLOCK_TIME_MS) / (1000 * BLOCK_TIME_SECONDS)
   numBlocks = Math.floor(numBlocks)
   return numBlocks
+}
 
+function addBlockHeightToTransaction (txObj) {
+  let txHeight = getBlockHeight(txObj.txDate) + 3
+
+  const now = (new Date()).getTime()
+  const blockHeight = getBlockHeight(now)
+
+  if (blockHeight - txHeight < 0) {
+    txHeight = 0
+  }
+  txObj.blockHeight = txHeight
 }
 
 router.get('/transaction/:tx_id', function(req, res) {
@@ -94,7 +104,7 @@ router.get('/transaction/:tx_id', function(req, res) {
         if (err) {
           res.json(err)
         } else {
-          response.blockHeight = getBlockHeight(response.txDate) + 1
+          addBlockHeightToTransaction(response)
           res.json(response)
         }
     })
@@ -158,6 +168,8 @@ router.post('/spend', function(req, res) {
 
       // Put the new transaction in the tx database
       db_transactions.insert(txObj, txid, function (err, response) {
+        addBlockHeightToTransaction(txObj)
+
         if (err) {
           res.json(err)
         } else {
@@ -173,7 +185,7 @@ router.post('/spend', function(req, res) {
                 if (err) {
                   res.json(err)
                 } else {
-                  res.json({ status: "Successful Spend", txid: txid })
+                  res.json({ status: "Successful Spend", transaction: txObj })
                 }
               })
             }
