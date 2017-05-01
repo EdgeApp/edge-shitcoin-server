@@ -1,3 +1,5 @@
+#!/usr/local/bin/node
+
 // server.js
 
 // BASE SETUP
@@ -5,6 +7,7 @@
 
 const GENESIS_BLOCK_TIME_MS = 1491004800000 // Apr 1, 2017 00:00 GMT
 const BLOCK_TIME_SECONDS    = 60
+const MINIMUM_NETWORK_FEE   = 20000
 
 // call the packages we need
 var express    = require('express');        // call express
@@ -46,6 +49,39 @@ if (init) {
   db_addresses = nano.db.use('db_addresses')
 }
 
+// BASE CLASSES
+// =============================================================================
+
+class InOutObj {
+  constructor (currencyCode, address, amount) {
+    this.currencyCode = currencyCode
+    this.address      = address
+    this.amount       = amount
+  }
+}
+
+class TxObj {
+  constructor (inputs, outputs, networkFee=0, blockHeight=0) {
+    const r = random()
+    this.txid         = r.hex(24)
+    this.networkFee   = networkFee
+    this.inputs       = inputs
+    this.outputs      = outputs
+    this.txDate       = (new Date()).getTime()
+    this.blockHeight  = blockHeight
+  }
+}
+
+class AddressObj {
+  constructor (address, trdAmount, txids) {
+    this.address      = address
+    this.amounts      = { 'TRD': trdAmount }
+    this.txids        = txids
+  }
+}
+
+
+
 // ROUTES FOR OUR API
 // =============================================================================
 var router = express.Router();              // get an instance of the express Router
@@ -59,22 +95,22 @@ router.use(function(req, res, next) {
 
 router.get('/address/:address_id', function(req, res) {
   console.log('API /address/' + req.params.address_id)
-  db_addresses.get(req.params.address_id, function(err, response) {
+  db_addresses.get(req.params.address_id, function(err, addressObj) {
     if (err) {
       if (err.error == 'not_found') {
         // Create address with default funds
-        createAddress(req.params.address_id, function(err, response) {
+        createAddress(req.params.address_id, function(err, addressObj2) {
           if (err) {
             res.json(err);
           } else {
-            res.json(response);
+            res.json(addressObj2);
           }
         })
       } else {
         res.json(err);
       }
     } else {
-      res.json(response);
+      res.json(addressObj);
     }
   })
 });
@@ -119,34 +155,109 @@ router.get('/height', function(req, res) {
   res.json(response)
 })
 
+router.post('/add_token', function(req, res) {
+  const currencyCode  = req.body.currencyCode
+  const address       = req.body.address
+  const amount        = req.body.amount
+
+  // Create Tx that spends from coinbase_tx to address with currencyCode
+  const input   = new InOutObj(currencyCode, 'coinbase_tx', amount)
+  const output  = new InOutObj(currencyCode, address, amount)
+  const txObj = new TxObj([input], [output])
+
+  // Get addressObj from DB
+  db_addresses.get(address, function (err, addressObj) {
+    if (err) {
+      res.json(err)
+      return
+    }
+    // Add txid and new amount to addressObj
+    addressObj.txids.push(txObj.txid)
+    if (addressObj.amounts[currencyCode] == undefined) {
+      addressObj.amounts[currencyCode] = 0
+    }
+    addressObj.amounts[currencyCode] += amount
+
+    // Update addressObj and create new tx in db
+    db_addresses.insert(addressObj, addressObj.address, function (err, response1) {
+      if (err) {
+        res.json(err)
+      } else {
+        db_transactions.insert(txObj, txObj.txid, function (err, response2) {
+          if (err) {
+            res.json(err)
+          } else {
+            res.json(addressObj)
+          }
+        })
+      }
+    })
+  })
+
+})
+
 router.post('/spend', function(req, res) {
-  var inputs = req.body.inputs
-  var outputs = req.body.outputs
+  let inputs = req.body.inputs
+  let outputs = req.body.outputs
 
   // Make sure all inputs are >= outputs
-  var totalInputs = 0
-  var totalOutputs = 0
+  let totalInputs = { TRD: 0 }
+  let totalOutputs = { TRD: 0 }
+  let currencyCodes = [ 'TRD' ]
+
   for (var n in inputs) {
-    if (inputs[n].amount < 0) {
+    const input = inputs[n]
+    if (input.amount < 0) {
       res.json({err: "Error: negative input"})
       return
     }
-    totalInputs += inputs[n].amount
+    const currencyCode = input.currencyCode
+    if (totalInputs[currencyCode] == undefined) {
+      totalInputs[currencyCode] = 0
+    }
+    totalInputs[currencyCode] += input.amount
+
+    if (currencyCodes.indexOf(currencyCode) == -1) {
+      currencyCodes.push(currencyCode)
+    }
   }
 
   for (var n in outputs) {
-    if (outputs[n].amount < 0) {
+    const output = outputs[n]
+    if (output.amount < 0) {
       res.json({err: "Error: negative output"})
       return
     }
-    totalOutputs += outputs[n].amount
-  }
-  if (totalOutputs > totalInputs) {
-    res.json({err: "Error: Insufficient funds"})
-    return
+    const currencyCode = output.currencyCode
+    if (totalOutputs[currencyCode] == undefined) {
+      totalOutputs[currencyCode] = 0
+    }
+    totalOutputs[currencyCode] += output.amount
+
+    if (currencyCodes.indexOf(currencyCode) == -1) {
+      currencyCodes.push(currencyCode)
+    }
   }
 
-  const networkFee = totalInputs - totalOutputs
+  for (let n in currencyCodes) {
+    const currencyCode = currencyCodes[n]
+    if (totalOutputs[currencyCode] > totalInputs[currencyCode]) {
+      res.json({err: "Error: Insufficient funds: " + currencyCode})
+      return
+    }
+    if (currencyCode != 'TRD') {
+      if (totalOutputs[currencyCode] != totalInputs[currencyCode]) {
+        res.json({err: "Error: Inequal input/output for token: " + currencyCode})
+        return
+      }
+    }
+  }
+
+  const networkFee = totalInputs['TRD'] - totalOutputs['TRD']
+  if (networkFee < MINIMUM_NETWORK_FEE) {
+    res.json({err: "Error: insufficient network fee"})
+    return
+  }
 
   // Make sure all input addresses at least have sufficient funds
   var chkInputs = inputs.slice()
@@ -154,20 +265,11 @@ router.post('/spend', function(req, res) {
     if (err) {
       res.json(err)
     } else {
-      const r = random()
-      const txid = r.hex(24)
-      const d = new Date()
 
-      txObj = {
-        txid,
-        networkFee: networkFee,
-        inputs: inputs,
-        outputs: outputs,
-        txDate: d.getTime()
-      }
+      const txObj = new TxObj(inputs, outputs, networkFee)
 
       // Put the new transaction in the tx database
-      db_transactions.insert(txObj, txid, function (err, response) {
+      db_transactions.insert(txObj, txObj.txid, function (err, response) {
         addBlockHeightToTransaction(txObj)
 
         if (err) {
@@ -176,12 +278,12 @@ router.post('/spend', function(req, res) {
           // Update input addresses and output addresses with new balances and
           // Add txid to their lists
           var spInputs = inputs.slice()
-          spendInputOutputs(spInputs, 1, txid, function (err, response) {
+          spendInputOutputs(spInputs, 1, txObj.txid, function (err, response) {
             if (err) {
               res.json(err)
             } else {
               var spOutputs = outputs.slice()
-              spendInputOutputs(spOutputs, 0, txid, function (err, response) {
+              spendInputOutputs(spOutputs, 0, txObj.txid, function (err, response) {
                 if (err) {
                   res.json(err)
                 } else {
@@ -209,9 +311,9 @@ console.log('Magic happens on port ' + port);
 function createAddress(addr, cb) {
   // Parse out the last part of address after "__"
   const parts = addr.split('__')
-  var amountString = ''
-  var amountInt = 0
-  let addressObj = []
+  let amountString = ''
+  let amountInt = 0
+  let txObj = {}
 
   if (parts.length > 1) {
     amountString = parts[parts.length - 1]
@@ -220,45 +322,26 @@ function createAddress(addr, cb) {
 
   // Insert the new address
 
-  addressObj = {
-    address: addr,
-    balance: amountInt
-  }
-
-  const r = random()
-  const txid = r.hex(24)
+  let txids = null
   if (amountInt > 0) {
-    addressObj.txids = [ txid ]
+    const inputs  = [ new InOutObj('TRD', 'coinbase_tx', amountInt) ]
+    const outputs = [ new InOutObj('TRD', addr, amountInt) ]
+    txObj = new TxObj(inputs, outputs)
+    txids = [ txObj.txid ]
   }
+  const addressObj = new AddressObj(addr, amountInt, txids)
 
   db_addresses.insert(addressObj, addr, function (err, res) {
     if (err)
       cb(err)
-    else if (amountInt) {
-      const d = new Date()
-
-      const txObj = {
-        txid,
-        inputs: [
-          { address: 'coinbase_tx', amount: amountInt }
-        ],
-        outputs: [
-          { address: addr, amount: amountInt }
-        ],
-        networkFee: 0,
-        txDate: d.getTime()
-      }
-      if (amountInt > 0) {
-        db_transactions.insert(txObj, txid, function (err, res) {
-          if (err) {
-            cb(err)
-          } else {
-            cb(null, addressObj)
-          }
-        })
-      } else {
-        cb(null, addressObj)
-      }
+    else if (amountInt > 0) {
+      db_transactions.insert(txObj, txObj.txid, function (err, res) {
+        if (err) {
+          cb(err)
+        } else {
+          cb(null, addressObj)
+        }
+      })
     } else {
       cb(null, addressObj)
     }
@@ -270,15 +353,16 @@ function checkInputs (inputs, cb) {
   if (inputs.length == 0) {
     cb(null, true)
   } else {
-    db_addresses.get(inputs[0].address, function (err, res) {
+    const input = inputs[0]
+    db_addresses.get(input.address, function (err, addressObj) {
       if (err) {
         cb(err)
       } else {
-        if (res.balance >= inputs[0].amount) {
+        if (addressObj.amounts[input.currencyCode] >= input.amount) {
           inputs.splice(0, 1)
           checkInputs(inputs, cb)
         } else {
-          cb({error: "Insufficient funds in address " + inputs[i].address})
+          cb({error: "Insufficient [" + input.currencyCode + "] funds in address " + input.address})
         }
       }
     })
@@ -289,22 +373,26 @@ function spendInputOutputs (inOuts, bIn, txid, cb) {
   if (inOuts.length == 0) {
     cb(null)
   } else {
-    db_addresses.get(inOuts[0].address, function (err, res) {
+    const inOut = inOuts[0]
+    const currencyCode = inOut.currencyCode
+    db_addresses.get(inOut.address, function (err, addressObj) {
       if (err) {
         cb(err)
       } else {
-        var amt = inOuts[0].amount
+        var amt = inOut.amount
         if (bIn) {
           amt *= -1
         }
-        res.balance += amt
-        if (res.txids == undefined) {
-          res.txids = [txid]
+        addressObj.amounts[currencyCode] += amt
+        if (addressObj.txids == undefined) {
+          addressObj.txids = [txid]
         } else {
-          res.txids = res.txids.concat(txid)
+          if (addressObj.txids.indexOf(txid) == -1) {
+            addressObj.txids.push(txid)
+          }
         }
 
-        db_addresses.insert(res, inOuts[ 0 ].address, function (err, res) {
+        db_addresses.insert(addressObj, inOut.address, function (err, res) {
           if (err) {
             cb(err)
           } else {
