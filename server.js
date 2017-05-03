@@ -8,6 +8,8 @@
 const GENESIS_BLOCK_TIME_MS = 1491004800000 // Apr 1, 2017 00:00 GMT
 const BLOCK_TIME_SECONDS    = 60
 const MINIMUM_NETWORK_FEE   = 20000
+const PRIMARY_CURRENCY      = 'TRD'
+const TOKEN_CODES           = ['ANA', 'DOGESHIT', 'CRAP']
 
 // call the packages we need
 var express    = require('express');        // call express
@@ -74,9 +76,16 @@ class TxObj {
 
 class AddressObj {
   constructor (address, trdAmount, txids) {
-    this.address      = address
-    this.amounts      = { 'TRD': trdAmount }
-    this.txids        = txids
+    this.address                    = address
+    this.amounts                    = {}
+    this.amounts[PRIMARY_CURRENCY]  = trdAmount
+    this.txids                      = txids
+
+    for (const n in TOKEN_CODES) {
+      const code = TOKEN_CODES[n]
+      this.amounts[code] = trdAmount * (Number(n)+2)
+    }
+
   }
 }
 
@@ -201,9 +210,11 @@ router.post('/spend', function(req, res) {
   let outputs = req.body.outputs
 
   // Make sure all inputs are >= outputs
-  let totalInputs = { TRD: 0 }
-  let totalOutputs = { TRD: 0 }
-  let currencyCodes = [ 'TRD' ]
+  let totalInputs = {}
+  totalInputs[PRIMARY_CURRENCY] = 0
+  let totalOutputs = {}
+  totalOutputs[PRIMARY_CURRENCY] = 0
+  let currencyCodes = [ PRIMARY_CURRENCY ]
 
   for (var n in inputs) {
     const input = inputs[n]
@@ -245,7 +256,7 @@ router.post('/spend', function(req, res) {
       res.json({err: "Error: Insufficient funds: " + currencyCode})
       return
     }
-    if (currencyCode != 'TRD') {
+    if (currencyCode != PRIMARY_CURRENCY) {
       if (totalOutputs[currencyCode] != totalInputs[currencyCode]) {
         res.json({err: "Error: Inequal input/output for token: " + currencyCode})
         return
@@ -253,7 +264,7 @@ router.post('/spend', function(req, res) {
     }
   }
 
-  const networkFee = totalInputs['TRD'] - totalOutputs['TRD']
+  const networkFee = totalInputs[PRIMARY_CURRENCY] - totalOutputs[PRIMARY_CURRENCY]
   if (networkFee < MINIMUM_NETWORK_FEE) {
     res.json({err: "Error: insufficient network fee"})
     return
@@ -324,8 +335,15 @@ function createAddress(addr, cb) {
 
   let txids = null
   if (amountInt > 0) {
-    const inputs  = [ new InOutObj('TRD', 'coinbase_tx', amountInt) ]
-    const outputs = [ new InOutObj('TRD', addr, amountInt) ]
+    let inputs  = [ new InOutObj(PRIMARY_CURRENCY, 'coinbase_tx', amountInt) ]
+    let outputs = [ new InOutObj(PRIMARY_CURRENCY, addr, amountInt) ]
+
+    for (const n in TOKEN_CODES) {
+      const code = TOKEN_CODES[n]
+      inputs  =  inputs.concat([ new InOutObj(code, 'coinbase_tx', amountInt * (Number(n)+2)) ])
+      outputs = outputs.concat([ new InOutObj(code, addr, amountInt * (Number(n)+2)) ])
+    }
+
     txObj = new TxObj(inputs, outputs)
     txids = [ txObj.txid ]
   }
