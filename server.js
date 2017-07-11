@@ -28,7 +28,7 @@ var port = process.env.PORT || 8080;        // set our port
 
 // Nano for CouchDB
 // =============================================================================
-var nano = require('nano')('http://localhost:5984')
+var nano = require('nano')('http://shitcoin:kids_in_pool@localhost:5984')
 var db_transactions
 var db_addresses
 var init = true
