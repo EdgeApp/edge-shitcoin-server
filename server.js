@@ -69,7 +69,7 @@ class TxObj {
     this.networkFee   = networkFee
     this.inputs       = inputs
     this.outputs      = outputs
-    this.txDate       = (new Date()).getTime()
+    this.txDate       = Date.now() / 1000
     this.blockHeight  = blockHeight
   }
 }
@@ -134,7 +134,7 @@ function getBlockHeight(unixTimeSeconds) {
 function addBlockHeightToTransaction (txObj) {
   let txHeight = getBlockHeight(txObj.txDate) + 3
 
-  const now = (new Date()).getTime()
+  const now = Date.now() / 1000
   const blockHeight = getBlockHeight(now)
 
   if (blockHeight - txHeight < 0) {
@@ -157,7 +157,7 @@ router.get('/transaction/:tx_id', function(req, res) {
 
 router.get('/height', function(req, res) {
   console.log('API /height/')
-  const d = new Date()
+  const d = Date.now() / 1000
   var response = {
     height: getBlockHeight(d.getTime())
   }
