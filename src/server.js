@@ -9,7 +9,7 @@ import random from 'random-js'
 import cors from 'cors'
 import { bns } from 'biggystring'
 
-const GENESIS_BLOCK_TIME_MS = 1491004800000 // Apr 1, 2017 00:00 GMT
+const GENESIS_BLOCK_TIME = 1491004800
 const BLOCK_TIME_SECONDS = 60
 const MINIMUM_NETWORK_FEE = '20000'
 const PRIMARY_CURRENCY = 'TRD'
@@ -140,7 +140,7 @@ router.get('/address/:address_id', function (req, res) {
 
 function getBlockHeight (unixTimeSeconds:number):string {
   // 60s blocks starting at Jan 1 2017 GMT
-  let numBlocks = (unixTimeSeconds - GENESIS_BLOCK_TIME_MS) / (1000 * BLOCK_TIME_SECONDS)
+  let numBlocks = (unixTimeSeconds - GENESIS_BLOCK_TIME) / BLOCK_TIME_SECONDS
   numBlocks = Math.floor(numBlocks)
   return numBlocks.toString()
 }
