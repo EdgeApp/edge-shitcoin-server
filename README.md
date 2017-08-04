@@ -22,7 +22,13 @@
 
     sudo forever-service install shitcoin -r [username] --script lib/server.js  --start
     
-API calls
+## Restart, stop, delete service
+
+    sudo service shitcoin restart
+    sudo service shitcoin stop
+    sudo forever-service delete shitcoin
+    
+# API calls
 
 ## GET
 
