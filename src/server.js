@@ -34,23 +34,23 @@ let dbAddresses
 let init = true
 
 if (init) {
-  nano.db.destroy('dbTransactions', function (err, body, header) {
+  nano.db.destroy('db_transactions', function (err, body, header) {
     if (err) { console.log('Non-critical error. No tx database') }
-    nano.db.destroy('dbAddresses', function (err, body, header) {
+    nano.db.destroy('db_addresses', function (err, body, header) {
       if (err) { console.log('Non-critical error. No addr database') }
-      nano.db.create('dbTransactions', function (err, body, header) {
+      nano.db.create('db_transactions', function (err, body, header) {
         if (err) { return err }
-        dbTransactions = nano.db.use('dbTransactions')
-        nano.db.create('dbAddresses', function (err, body, header) {
+        dbTransactions = nano.db.use('db_transactions')
+        nano.db.create('db_addresses', function (err, body, header) {
           if (err) { return err }
-          dbAddresses = nano.db.use('dbAddresses')
+          dbAddresses = nano.db.use('db_addresses')
         })
       })
     })
   })
 } else {
-  dbTransactions = nano.db.use('dbTransactions')
-  dbAddresses = nano.db.use('dbAddresses')
+  dbTransactions = nano.db.use('db_transactions')
+  dbAddresses = nano.db.use('db_addresses')
 }
 
 // BASE CLASSES
