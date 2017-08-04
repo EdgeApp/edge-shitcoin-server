@@ -53,9 +53,10 @@
     "webpack": "webpack",
     "rollup": "rollup -c",
     "updot": "updot",
+    "start": "node lib/server.js",
     "build": "npm run prepare && npm run flow",
     "cover": "nyc --reporter=lcov --reporter=text --reporter=html --extension .js npm test",
-    "lint --fix": "standard 'src/**/*.js' 'test/**/*.js' --fix",
+    "lint:fix": "standard 'src/**/*.js' 'test/**/*.js' --fix",
     "lint": "standard 'src/**/*.js' 'test/**/*.js'",
     "prepare": "npm run lint && npm run rollup",
     "test": "npm run build && mocha"

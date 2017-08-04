@@ -10,11 +10,6 @@ export default {
       dest: packageJson['main'],
       format: 'cjs',
       sourceMap: true
-    },
-    {
-      dest: packageJson['module'],
-      format: 'es',
-      sourceMap: true
     }
   ]
 }
