@@ -10,10 +10,18 @@
 
     couchdb
 
+## Build
+
+    npm run build
+
 ## Launch shitcoin API server
 
-    node server.js
+    node lib/server.js
 
+## Launch server using `forever-service`
+
+    sudo forever-service install shitcoin -r [username] --script lib/server.js  --start
+    
 API calls
 
 ## GET
@@ -26,25 +34,25 @@ https://localhost:8080/api/transaction/[transaction_id]
 {
   "_id": "fdc5615a6658e1b5349b5b62",
   "_rev": "1-d2907b1b6123d2bb18927580ab00eeb4",
-  "networkFee": 10,
+  "networkFee": "10",
   "inputs": [
     {
       "address": "1oijaweoijg2aef__200",
-      "amount": 50
+      "amount": "50"
     },
     {
       "address": "2lkjaeoija209fa__150",
-      "amount": 70
+      "amount": "70"
     }
   ],
   "outputs": [
     {
       "address": "3029g2o4tiawehawlkwjf",
-      "amount": 35
+      "amount": "35"
     },
     {
       "address": "4029g2o4tiuhagwlkawgw",
-      "amount": 75
+      "amount": "75"
     }
   ]
 }
@@ -62,7 +70,7 @@ https://localhost:8080/api/address/[address]
 {
   "_id": "3029g2o4tiawehawlkwjf",
   "_rev": "2-16fe358fa8178118a0fa46e2eab1e603",
-  "balance": 35,
+  "balance": "35",
   "txids": [
     "223396f378f391f54ae81b51",
     "fdc5615a6658e1b5349b5b62"
@@ -82,13 +90,13 @@ https://localhost:8080/api/spend
 
 {
         "inputs": [
-                { "address": "1oijaweoijg2aef__200", "amount": 50 },
-                { "address": "2lkjaeoija209fa__150", "amount": 70 }
+                { "address": "1oijaweoijg2aef__200", "amount": "50" },
+                { "address": "2lkjaeoija209fa__150", "amount": "70" }
         ],
 
         "outputs": [
-                { "address": "3029g2o4tiawehawlkwjf", "amount": 35 },
-                { "address": "4029g2o4tiuhagwlkawgw", "amount": 75 }
+                { "address": "3029g2o4tiawehawlkwjf", "amount": "35" },
+                { "address": "4029g2o4tiuhagwlkawgw", "amount": "75" }
         ]
 }
 ```
