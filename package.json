@@ -23,7 +23,6 @@
     "body-parser": "~1.0.1",
     "cors": "^2.8.3",
     "express": "~4.0.0",
-    "mongoose": "~3.6.13",
     "nano": "^6.2.0",
     "random-js": "^1.0.8"
   },
@@ -50,15 +49,14 @@
     ]
   },
   "scripts": {
-    "precommit": "npm test",
     "flow": "flow",
     "webpack": "webpack",
     "rollup": "rollup -c",
     "updot": "updot",
     "build": "npm run prepare && npm run flow",
     "cover": "nyc --reporter=lcov --reporter=text --reporter=html --extension .js npm test",
-    "lint --fix": "standard '*.js' 'src/**/*.js' 'test/**/*.js' --fix",
-    "lint": "standard '*.js' 'src/**/*.js' 'test/**/*.js'",
+    "lint --fix": "standard 'src/**/*.js' 'test/**/*.js' --fix",
+    "lint": "standard 'src/**/*.js' 'test/**/*.js'",
     "prepare": "npm run lint && npm run rollup",
     "test": "npm run build && mocha"
   }
