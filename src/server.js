@@ -31,9 +31,9 @@ const port = process.env.PORT || 8080        // set our port
 const nano = require('nano')('http://shitcoin:kids_in_pool@localhost:5984')
 let dbTransactions
 let dbAddresses
-let init = true
+let init = false
 
-if (init) {
+if (!init) {
   nano.db.destroy('db_transactions', function (err, body, header) {
     if (err) { console.log('Non-critical error. No tx database') }
     nano.db.destroy('db_addresses', function (err, body, header) {
@@ -53,6 +53,7 @@ if (init) {
   dbAddresses = nano.db.use('db_addresses')
 }
 
+init = true
 // BASE CLASSES
 // =============================================================================
 
@@ -112,8 +113,12 @@ const router = express.Router()              // get an instance of the express R
 // middleware to use for all requests
 router.use(function (req, res, next) {
     // do logging
-  console.log('Something is happening.')
-  next() // make sure we go to the next routes and don't stop here
+  if (!init) {
+    res.json(new Error('Initializing...'))
+  } else {
+    console.log('Something is happening.')
+    next() // make sure we go to the next routes and don't stop here
+  }
 })
 
 router.get('/address/:address_id', function (req, res) {
@@ -180,27 +185,34 @@ router.get('/height', function (req, res) {
 })
 
 router.post('/add_token', function (req, res) {
-  const currencyCode = req.body.currencyCode
-  const address = req.body.address
-  const amount = req.body.amount
+  const currencyCode:string = req.body.currencyCode
+  const address:string = req.body.address
+  const amount:string = req.body.amount
 
   // Create Tx that spends from coinbase_tx to address with currencyCode
-  const input = new InOutObj(currencyCode, 'coinbase_tx', amount)
-  const output = new InOutObj(currencyCode, address, amount)
-  const txObj = new TxObj([input], [output])
+  const input:InOutObj = new InOutObj(currencyCode, 'coinbase_tx', amount)
+  const output:InOutObj = new InOutObj(currencyCode, address, amount)
+  const txObj:TxObj = new TxObj([input], [output])
 
   // Get addressObj from DB
-  dbAddresses.get(address, function (err, addressObj) {
+  dbAddresses.get(address, function (err, addressObj:AddressObj) {
     if (err) {
       res.json(err)
       return
     }
     // Add txid and new amount to addressObj
-    addressObj.txids.push(txObj.txid)
-    if (addressObj.amounts[currencyCode] === undefined) {
-      addressObj.amounts[currencyCode] = 0
+    if (
+      typeof addressObj.txids === 'undefined' ||
+      addressObj.txids === null
+    ) {
+      addressObj.txids = []
     }
-    addressObj.amounts[currencyCode] += amount
+    addressObj.txids.push(txObj.txid)
+    if (typeof addressObj.amounts[currencyCode] === 'undefined') {
+      addressObj.amounts[currencyCode] = '0'
+    }
+    const tempVal = addressObj.amounts[currencyCode]
+    addressObj.amounts[currencyCode] = bns.add(tempVal, amount)
 
     // Update addressObj and create new tx in db
     dbAddresses.insert(addressObj, addressObj.address, function (err, response1) {
@@ -231,7 +243,7 @@ router.post('/spend', function (req, res) {
   let currencyCodes = [ PRIMARY_CURRENCY ]
 
   for (const input of inputs) {
-    if (bns.lt(input.amount, 0)) {
+    if (bns.lt(input.amount, '0')) {
       res.json({err: 'Error: negative input'})
       return
     }
@@ -247,7 +259,7 @@ router.post('/spend', function (req, res) {
   }
 
   for (let output of outputs) {
-    if (bns.lt(output.amount, 0)) {
+    if (bns.lt(output.amount, '0')) {
       res.json({err: 'Error: negative output'})
       return
     }
@@ -405,12 +417,16 @@ function spendInputOutputs (inOuts, bIn, txid, cb) {
       if (err) {
         cb(err)
       } else {
-        let amt = inOut.amount
+        let amt:string = inOut.amount
         if (bIn) {
-          amt *= -1
+          amt = bns.mul(amt, '-1')
         }
-        addressObj.amounts[currencyCode] += amt
-        if (addressObj.txids === undefined) {
+        const tempVal = addressObj.amounts[currencyCode]
+        addressObj.amounts[currencyCode] = bns.add(tempVal, amt)
+        if (
+          typeof addressObj.txids === 'undefined' ||
+          addressObj.txids === null
+        ) {
           addressObj.txids = [txid]
         } else {
           if (addressObj.txids.indexOf(txid) === -1) {
